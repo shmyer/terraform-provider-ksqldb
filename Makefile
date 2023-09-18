@@ -2,7 +2,7 @@ TEST?=$$(go list ./... | grep -v 'vendor')
 NAMESPACE=shmyer
 NAME=ksqldb
 BINARY=terraform-provider-${NAME}
-VERSION=0.2.1
+VERSION=0.2.2
 OS_ARCH=darwin_amd64
 
 default: install

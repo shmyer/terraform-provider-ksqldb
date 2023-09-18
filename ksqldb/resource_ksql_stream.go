@@ -226,6 +226,8 @@ func resourceKsqldbStreamRead(ctx context.Context, d *schema.ResourceData, m int
 
 	diags = append(diags, setTimestamp(diags, d, stream)...)
 
+	// TODO find a way to read properties
+
 	return diags
 }
 

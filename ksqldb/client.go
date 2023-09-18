@@ -35,8 +35,8 @@ type Source struct {
 }
 
 type Payload struct {
-	Ksql       string            `json:"ksql"`
-	Properties map[string]string `json:"streamsProperties"`
+	Ksql       string                 `json:"ksql"`
+	Properties map[string]interface{} `json:"streamsProperties"`
 }
 
 // NewClient -
@@ -151,7 +151,7 @@ func (c *Client) DoCreateStream(d *schema.ResourceData, source bool, mustExist b
 	}
 
 	ksql, err := createStreamKsql(name, source, d)
-	properties := d.Get("properties").(map[string]string)
+	properties := d.Get("properties").(map[string]interface{})
 
 	payload := Payload{
 		Ksql:       *ksql,
