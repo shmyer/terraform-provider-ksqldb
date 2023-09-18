@@ -63,6 +63,7 @@ func resourceKsqldbSourceStream() *schema.Resource {
 			"properties": &schema.Schema{
 				Type:     schema.TypeMap,
 				Optional: true,
+				ForceNew: true,
 				Default:  map[string]string{},
 				Elem: &schema.Schema{
 					Type: schema.TypeString,
