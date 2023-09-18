@@ -8,8 +8,11 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 )
+
+var mutex sync.Mutex
 
 // Client -
 type Client struct {
@@ -68,11 +71,17 @@ func (c *Client) DoRequest(payload *Payload) (*Response, error) {
 	// set headers according to ksqlDB HTTP API Reference: https://docs.ksqldb.io/en/latest/developer-guide/api/#content-types
 	req.Header.Set("Accept", "application/vnd.ksql.v1+json")
 
+	// limit access to the client to one resource at a time. Otherwise, a ProducerFencedException may occur in ksqlDB.
+	mutex.Lock()
+
 	res, err := c.client.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer res.Body.Close()
+
+	// release
+	mutex.Unlock()
 
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
