@@ -4,8 +4,8 @@
 terraform {
   required_providers {
     ksqldb = {
-      version = "0.1.0"
-      source  = "hashicorp.com/shmyer/ksqldb"
+      version = "0.2.0"
+      source  = "shmyer/ksqldb"
     }
   }
 }

@@ -60,6 +60,14 @@ func resourceKsqldbSourceStream() *schema.Resource {
 				ForceNew:         true,
 				ValidateDiagFunc: validateIdentifier,
 			},
+			"properties": &schema.Schema{
+				Type:     schema.TypeMap,
+				Optional: true,
+				Default:  map[string]string{},
+				Elem: &schema.Schema{
+					Type: schema.TypeString,
+				},
+			},
 		},
 	}
 }

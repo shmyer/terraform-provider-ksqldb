@@ -35,7 +35,8 @@ type Source struct {
 }
 
 type Payload struct {
-	Ksql string `json:"ksql"`
+	Ksql       string            `json:"ksql"`
+	Properties map[string]string `json:"streamsProperties"`
 }
 
 // NewClient -
@@ -63,6 +64,9 @@ func (c *Client) DoRequest(payload *Payload) (*Response, error) {
 	}
 
 	req.SetBasicAuth(c.username, c.password)
+
+	// set headers according to ksqlDB HTTP API Reference: https://docs.ksqldb.io/en/latest/developer-guide/api/#content-types
+	req.Header.Set("Accept", "application/vnd.ksql.v1+json")
 
 	res, err := c.client.Do(req)
 	if err != nil {
@@ -122,46 +126,36 @@ func (c *Client) Describe(name string) (*Source, error) {
 }
 
 func (c *Client) CreateStream(d *schema.ResourceData, source bool) (*Source, error) {
-
-	name := d.Get("name").(string)
-
-	err := c.ValidateDoesNotExist(name)
-	if err != nil {
-		return nil, err
-	}
-
-	ksql, err := createStreamKsql(name, source, d)
-
-	payload := Payload{
-		Ksql: *ksql,
-	}
-
-	_, err = c.DoRequest(&payload)
-	if err != nil {
-		return nil, err
-	}
-
-	created, err := c.Describe(name)
-	if err != nil {
-		return nil, fmt.Errorf("this shouldn't happen") // TODO
-	}
-
-	return created, nil
+	return c.DoCreateStream(d, source, false)
 }
 
 func (c *Client) UpdateStream(d *schema.ResourceData) (*Source, error) {
+	// updating a stream is the same as creating it but with using "CREATE OR REPLACE" in the statement
+	return c.DoCreateStream(d, false, true)
+}
+
+func (c *Client) DoCreateStream(d *schema.ResourceData, source bool, mustExist bool) (*Source, error) {
 
 	name := d.Get("name").(string)
 
-	err := c.ValidateDoesExist(name)
-	if err != nil {
-		return nil, err
+	if mustExist {
+		err := c.ValidateDoesExist(name)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		err := c.ValidateDoesNotExist(name)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	ksql, err := createStreamKsql(name, false, d)
+	ksql, err := createStreamKsql(name, source, d)
+	properties := d.Get("properties").(map[string]string)
 
 	payload := Payload{
-		Ksql: *ksql,
+		Ksql:       *ksql,
+		Properties: properties,
 	}
 
 	_, err = c.DoRequest(&payload)

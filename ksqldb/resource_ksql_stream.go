@@ -69,10 +69,14 @@ func resourceKsqldbStream() *schema.Resource {
 				Optional:         true,
 				ValidateDiagFunc: validateIdentifier,
 			},
-			//"timestamp_format": &schema.Schema{
-			//	Type:     schema.TypeString,
-			//	Optional: true,
-			//},
+			"properties": &schema.Schema{
+				Type:     schema.TypeMap,
+				Optional: true,
+				Default:  map[string]string{},
+				Elem: &schema.Schema{
+					Type: schema.TypeString,
+				},
+			},
 		},
 	}
 }
