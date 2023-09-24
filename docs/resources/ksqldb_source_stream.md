@@ -1,18 +1,18 @@
 ---
-page_title: "stream Resource - terraform-provider-ksqldb"
-subcategory: ""
+page_title: "ksqldb_source_stream Resource - terraform-provider-ksqldb"
+subcategory: "Stream"
 description: |-
-  The stream resource allows you to configure a ksqlDB stream.
+  Configure a ksqlDB source stream
 ---
 
-# Resource `ksqldb_stream`
+# Resource `ksqldb_source_stream`
 
-The stream resource allows you to configure a ksqlDB stream.
+The source stream resource allows you to configure a ksqlDB source stream. Source streams are read-only.
 
 ## Example Usage
 
 ```terraform
-resource "ksqldb_stream" "clickstream" {
+resource "ksqldb_source_stream" "clickstream" {
   name        = "CLICKS"
   kafka_topic = "clickstream"
 
@@ -30,3 +30,4 @@ resource "ksqldb_stream" "clickstream" {
 - `key_schema_id` - (Optional) The schema ID of the key schema in Schema Registry. The schema is used for schema inference and data serialization.
 - `value_schema_id` - (Optional) The schema ID of the value schema in Schema Registry. The schema is used for schema inference and data serialization.
 - `timestamp` - (Optional) Sets a column within the stream's schema to be used as the default source of ROWTIME for any downstream queries.
+- `properties` - (Optional) Map of string properties to set as the "streamsProperties" parameter when issuing the KSQL statement via REST. 

@@ -12,8 +12,8 @@ import (
 func resourceKsqldbSourceStream() *schema.Resource {
 	return &schema.Resource{
 		CreateContext: resourceKsqldbSourceStreamCreate,
-		ReadContext:   resourceKsqldbStreamRead,
-		DeleteContext: resourceKsqldbStreamDelete,
+		ReadContext:   resourceKsqldbSourceStreamRead,
+		DeleteContext: resourceKsqldbSourceStreamDelete,
 		Schema: map[string]*schema.Schema{
 			"name": &schema.Schema{
 				Type:             schema.TypeString,
@@ -79,7 +79,7 @@ func resourceKsqldbSourceStreamCreate(ctx context.Context, d *schema.ResourceDat
 	// Warning or errors can be collected in a slice type
 	var diags diag.Diagnostics
 
-	stream, err := c.CreateStream(d, true)
+	stream, err := c.createStream(d, false, true)
 	if err != nil {
 		return diag.FromErr(err)
 	}
@@ -92,7 +92,59 @@ func resourceKsqldbSourceStreamCreate(ctx context.Context, d *schema.ResourceDat
 	// set id
 	d.SetId(*id)
 
-	resourceKsqldbStreamRead(ctx, d, m)
+	resourceKsqldbSourceStreamRead(ctx, d, m)
+
+	return diags
+}
+
+func resourceKsqldbSourceStreamRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+	c := m.(*Client)
+
+	// Warning or errors can be collected in a slice type
+	var diags diag.Diagnostics
+
+	name := d.Get("name").(string)
+
+	stream, err := c.describe(name)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	if err := d.Set("kafka_topic", stream.Topic); err != nil {
+		diags = append(diags, diag.FromErr(err)...)
+	}
+	if err := d.Set("key_format", stream.KeyFormat); err != nil {
+		diags = append(diags, diag.FromErr(err)...)
+	}
+	if err := d.Set("value_format", stream.ValueFormat); err != nil {
+		diags = append(diags, diag.FromErr(err)...)
+	}
+	diags = append(diags, setSchemaIds(d, stream.Statement, true, KeySchemaIdPattern)...)
+	diags = append(diags, setSchemaIds(d, stream.Statement, false, ValueSchemaIdPattern)...)
+
+	diags = append(diags, setTimestamp(diags, d, stream)...)
+
+	// TODO find a way to read properties
+
+	return diags
+}
+
+func resourceKsqldbSourceStreamDelete(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+	c := m.(*Client)
+
+	// Warning or errors can be collected in a slice type
+	var diags diag.Diagnostics
+
+	name := d.Get("name").(string)
+
+	err := c.dropStream(name)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	// d.SetId("") is automatically called assuming delete returns no errors, but
+	// it is added here for explicitness.
+	d.SetId("")
 
 	return diags
 }

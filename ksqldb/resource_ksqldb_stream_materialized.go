@@ -9,12 +9,12 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
-func resourceKsqldbStream() *schema.Resource {
+func resourceKsqldbMaterializedStream() *schema.Resource {
 	return &schema.Resource{
-		CreateContext: resourceKsqldbStreamCreate,
-		ReadContext:   resourceKsqldbStreamRead,
-		UpdateContext: resourceKsqldbStreamUpdate,
-		DeleteContext: resourceKsqldbStreamDelete,
+		CreateContext: resourceKsqldbMaterializedStreamCreate,
+		ReadContext:   resourceKsqldbMaterializedStreamRead,
+		UpdateContext: resourceKsqldbMaterializedStreamUpdate,
+		DeleteContext: resourceKsqldbMaterializedStreamDelete,
 		Schema: map[string]*schema.Schema{
 			"name": &schema.Schema{
 				Type:             schema.TypeString,
@@ -22,10 +22,15 @@ func resourceKsqldbStream() *schema.Resource {
 				ForceNew:         true,
 				ValidateDiagFunc: validateIdentifier,
 			},
+			"query": &schema.Schema{
+				Type:             schema.TypeString,
+				Required:         true,
+				ValidateDiagFunc: validateQuery,
+			},
 
 			"kafka_topic": &schema.Schema{
 				Type:             schema.TypeString,
-				Required:         true,
+				Optional:         true,
 				ValidateDiagFunc: validateKafkaTopic,
 			},
 			"key_format": &schema.Schema{
@@ -67,13 +72,13 @@ func resourceKsqldbStream() *schema.Resource {
 	}
 }
 
-func resourceKsqldbStreamCreate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+func resourceKsqldbMaterializedStreamCreate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	c := m.(*Client)
 
 	// Warning or errors can be collected in a slice type
 	var diags diag.Diagnostics
 
-	stream, err := c.createStream(d, false, false)
+	stream, err := c.createStream(d, true, false)
 	if err != nil {
 		return diag.FromErr(err)
 	}
@@ -86,12 +91,12 @@ func resourceKsqldbStreamCreate(ctx context.Context, d *schema.ResourceData, m i
 	// set id
 	d.SetId(*id)
 
-	resourceKsqldbStreamRead(ctx, d, m)
+	resourceKsqldbMaterializedStreamRead(ctx, d, m)
 
 	return diags
 }
 
-func resourceKsqldbStreamRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+func resourceKsqldbMaterializedStreamRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	c := m.(*Client)
 
 	// Warning or errors can be collected in a slice type
@@ -123,26 +128,26 @@ func resourceKsqldbStreamRead(ctx context.Context, d *schema.ResourceData, m int
 	return diags
 }
 
-func resourceKsqldbStreamUpdate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+func resourceKsqldbMaterializedStreamUpdate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	c := m.(*Client)
 
 	// Warning or errors can be collected in a slice type
 	var diags diag.Diagnostics
 
 	// update stream
-	_, err := c.updateStream(d, false)
+	_, err := c.updateStream(d, true)
 	if err != nil {
 		diags = append(diags, diag.FromErr(err)...)
 	}
 
 	// read stream again in order to refresh state
-	diagsRead := resourceKsqldbStreamRead(ctx, d, m)
+	diagsRead := resourceKsqldbMaterializedStreamRead(ctx, d, m)
 	diags = append(diags, diagsRead...)
 
 	return diags
 }
 
-func resourceKsqldbStreamDelete(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+func resourceKsqldbMaterializedStreamDelete(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	c := m.(*Client)
 
 	// Warning or errors can be collected in a slice type

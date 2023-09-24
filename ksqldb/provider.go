@@ -32,8 +32,9 @@ func Provider() *schema.Provider {
 			},
 		},
 		ResourcesMap: map[string]*schema.Resource{
-			"ksqldb_stream":        resourceKsqldbStream(),
-			"ksqldb_source_stream": resourceKsqldbSourceStream(),
+			"ksqldb_stream":              resourceKsqldbStream(),
+			"ksqldb_source_stream":       resourceKsqldbSourceStream(),
+			"ksqldb_materialized_stream": resourceKsqldbMaterializedStream(),
 		},
 		DataSourcesMap:       map[string]*schema.Resource{},
 		ConfigureContextFunc: providerConfigure,
@@ -48,7 +49,7 @@ func providerConfigure(ctx context.Context, d *schema.ResourceData) (interface{}
 	// Warning or errors can be collected in a slice type
 	var diags diag.Diagnostics
 
-	c, err := NewClient(&url, &username, &password)
+	c, err := newClient(&url, &username, &password)
 	if err != nil {
 		diags = append(diags, diag.Diagnostic{
 			Severity: diag.Error,

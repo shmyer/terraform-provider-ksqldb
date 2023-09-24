@@ -2,7 +2,7 @@
 page_title: "Provider: ksqlDB"
 subcategory: ""
 description: |-
-Terraform provider for interacting with ksqlDB API.
+  Terraform provider for interacting with ksqlDB API
 ---
 
 # ksqlDB Provider
@@ -11,6 +11,7 @@ The ksqlDB provider is used to interact with a ksqlDB cluster. It lets users...
 
 1. manage ksqlDB streams
 2. manage ksqlDB source streams
+2. manage ksqlDB materialized streams
 
 Use the navigation to the left to read about the available resources.
 
@@ -28,8 +29,10 @@ provider "ksqldb" {
 
 ## Schema
 
+### Required
+- **url** (String) ksqlDB API base URL. Can also be specified via environment variable KSQLDB_URL.
+
 ### Optional
 
-- **username** (String, Optional) Username to authenticate to ksqlDB API
-- **password** (String, Optional) Password to authenticate to ksqlDB API
-- **url** (String, Optional) ksqlDB API base URL
+- **username** (String, Optional) Username to authenticate to ksqlDB API. Can also be specified via environment variable KSQLDB_USERNAME.
+- **password** (String, Optional) Password to authenticate to ksqlDB API. Can also be specified via environment variable KSQLDB_PASSWORD.

@@ -42,8 +42,8 @@ type Payload struct {
 	Properties map[string]interface{} `json:"streamsProperties"`
 }
 
-// NewClient -
-func NewClient(url, username, password *string) (*Client, error) {
+// newClient -
+func newClient(url, username, password *string) (*Client, error) {
 	c := Client{
 		client:   &http.Client{Timeout: 10 * time.Second},
 		url:      *url,
@@ -54,7 +54,7 @@ func NewClient(url, username, password *string) (*Client, error) {
 	return &c, nil
 }
 
-func (c *Client) DoRequest(payload *Payload) (*Response, error) {
+func (c *Client) doRequest(payload *Payload) (*Response, error) {
 
 	rb, err := json.Marshal(payload)
 	if err != nil {
@@ -120,13 +120,13 @@ func (c *Client) DoRequest(payload *Payload) (*Response, error) {
 	return nil, errors.New("response must be object or list")
 }
 
-func (c *Client) Describe(name string) (*Source, error) {
+func (c *Client) describe(name string) (*Source, error) {
 
 	payload := Payload{
 		Ksql: "DESCRIBE " + name + ";",
 	}
 
-	response, err := c.DoRequest(&payload)
+	response, err := c.doRequest(&payload)
 	if err != nil {
 		return nil, err
 	}
@@ -134,32 +134,34 @@ func (c *Client) Describe(name string) (*Source, error) {
 	return &response.Source, nil
 }
 
-func (c *Client) CreateStream(d *schema.ResourceData, source bool) (*Source, error) {
-	return c.DoCreateStream(d, source, false)
+func (c *Client) createStream(d *schema.ResourceData, materialized bool, source bool) (*Source, error) {
+	return c.doCreateStream(d, source, materialized, false)
 }
 
-func (c *Client) UpdateStream(d *schema.ResourceData) (*Source, error) {
-	// updating a stream is the same as creating it but with using "CREATE OR REPLACE" in the statement
-	return c.DoCreateStream(d, false, true)
+func (c *Client) updateStream(d *schema.ResourceData, materialized bool) (*Source, error) {
+	// updating a stream is the same as creating it but with using "CREATE OR REPLACE" in the statement.
+	// Therefore, it can't be a source stream.
+	// Also, it must exist.
+	return c.doCreateStream(d, false, materialized, true)
 }
 
-func (c *Client) DoCreateStream(d *schema.ResourceData, source bool, mustExist bool) (*Source, error) {
+func (c *Client) doCreateStream(d *schema.ResourceData, source bool, materialized bool, mustExist bool) (*Source, error) {
 
 	name := d.Get("name").(string)
 
 	if mustExist {
-		err := c.ValidateDoesExist(name)
+		err := c.validateDoesExist(name)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		err := c.ValidateDoesNotExist(name)
+		err := c.validateDoesNotExist(name)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	ksql, err := createStreamKsql(name, source, d)
+	ksql, err := createStreamKsql(name, source, materialized, d)
 	properties := d.Get("properties").(map[string]interface{})
 
 	payload := Payload{
@@ -167,12 +169,12 @@ func (c *Client) DoCreateStream(d *schema.ResourceData, source bool, mustExist b
 		Properties: properties,
 	}
 
-	_, err = c.DoRequest(&payload)
+	_, err = c.doRequest(&payload)
 	if err != nil {
 		return nil, err
 	}
 
-	created, err := c.Describe(name)
+	created, err := c.describe(name)
 	if err != nil {
 		return nil, fmt.Errorf("this shouldn't happen") // TODO
 	}
@@ -180,82 +182,9 @@ func (c *Client) DoCreateStream(d *schema.ResourceData, source bool, mustExist b
 	return created, nil
 }
 
-func createStreamKsql(name string, source bool, d *schema.ResourceData) (*string, error) {
+func (c *Client) dropStream(name string) error {
 
-	kafkaTopic := d.Get("kafka_topic").(string)
-	keyFormat := d.Get("key_format").(string)
-	valueFormat := d.Get("value_format").(string)
-	keySchemaId := d.Get("key_schema_id").(int)
-	valueSchemaId := d.Get("value_schema_id").(int)
-
-	var sb strings.Builder
-
-	sb.WriteString("CREATE")
-
-	if source {
-		sb.WriteString(" SOURCE")
-	} else {
-		sb.WriteString(" OR REPLACE")
-	}
-
-	sb.WriteString(" STREAM ")
-	sb.WriteString(name)
-
-	// TODO columns?
-
-	comma := false
-	sb.WriteString(" WITH (")
-	if &kafkaTopic != nil {
-		comma = checkCommaForString(&sb, &kafkaTopic, comma)
-		sb.WriteString(fmt.Sprintf("KAFKA_TOPIC = '%s'", kafkaTopic))
-	}
-	if &keyFormat != nil {
-		comma = checkCommaForString(&sb, &keyFormat, comma)
-		sb.WriteString(fmt.Sprintf("KEY_FORMAT = '%s'", keyFormat))
-	}
-	if &valueFormat != nil {
-		comma = checkCommaForString(&sb, &valueFormat, comma)
-		sb.WriteString(fmt.Sprintf("VALUE_FORMAT = '%s'", valueFormat))
-	}
-	if &keySchemaId != nil && keySchemaId != -1 {
-		comma = checkCommaForInt(&sb, &keySchemaId, comma)
-		sb.WriteString(fmt.Sprintf("KEY_SCHEMA_ID = %d", keySchemaId))
-	}
-	if &valueSchemaId != nil && keySchemaId != -1 {
-		comma = checkCommaForInt(&sb, &valueSchemaId, comma)
-		sb.WriteString(fmt.Sprintf("VALUE_SCHEMA_ID = %d", valueSchemaId))
-	}
-
-	sb.WriteString(");")
-
-	ksql := sb.String()
-
-	return &ksql, nil
-}
-
-func checkCommaForString(sb *strings.Builder, str *string, comma bool) bool {
-	if str != nil {
-		if comma {
-			sb.WriteString(", ")
-		}
-		return true
-	}
-	return comma
-}
-
-func checkCommaForInt(sb *strings.Builder, i *int, comma bool) bool {
-	if i != nil && *i != -1 {
-		if comma {
-			sb.WriteString(", ")
-		}
-		return true
-	}
-	return comma
-}
-
-func (c *Client) DropStream(name string) error {
-
-	err := c.ValidateDoesExist(name)
+	err := c.validateDoesExist(name)
 	if err != nil {
 		return err
 	}
@@ -264,7 +193,7 @@ func (c *Client) DropStream(name string) error {
 		Ksql: fmt.Sprintf("DROP STREAM %s;", name),
 	}
 
-	response, err := c.DoRequest(&payload)
+	response, err := c.doRequest(&payload)
 	if err != nil {
 		return err
 	}
@@ -276,9 +205,9 @@ func (c *Client) DropStream(name string) error {
 	return nil
 }
 
-func (c *Client) ValidateDoesExist(name string) error {
+func (c *Client) validateDoesExist(name string) error {
 
-	_, err := c.Describe(name)
+	_, err := c.describe(name)
 	if err != nil {
 		return fmt.Errorf("there is no stream or table named %s", name)
 	}
@@ -286,9 +215,9 @@ func (c *Client) ValidateDoesExist(name string) error {
 	return nil
 }
 
-func (c *Client) ValidateDoesNotExist(name string) error {
+func (c *Client) validateDoesNotExist(name string) error {
 
-	_, err := c.Describe(name)
+	_, err := c.describe(name)
 	if err == nil {
 		return fmt.Errorf("there is already a stream or a table named %s", name)
 	}
