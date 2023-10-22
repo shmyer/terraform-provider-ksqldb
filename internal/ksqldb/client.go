@@ -1,10 +1,11 @@
 package ksqldb
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -38,28 +39,28 @@ type Source struct {
 }
 
 type Payload struct {
-	Ksql       string                 `json:"ksql"`
-	Properties map[string]interface{} `json:"streamsProperties"`
+	Ksql       string            `json:"ksql"`
+	Properties map[string]string `json:"streamsProperties"`
 }
 
-// newClient -
-func newClient(url, username, password *string) (*Client, error) {
-	c := Client{
+// NewClient -
+func NewClient(url, username, password *string) *Client {
+	return &Client{
 		client:   &http.Client{Timeout: 10 * time.Second},
 		url:      *url,
 		username: *username,
 		password: *password,
 	}
-
-	return &c, nil
 }
 
-func (c *Client) doRequest(payload *Payload) (*Response, error) {
+func (c *Client) doRequest(ctx context.Context, payload *Payload) (*Response, error) {
 
 	rb, err := json.Marshal(payload)
 	if err != nil {
 		return nil, err
 	}
+
+	tflog.Info(ctx, fmt.Sprintf("Executing KSQL request: %s", rb))
 
 	req, err := http.NewRequest("POST", fmt.Sprintf("%s/ksql", c.url), strings.NewReader(string(rb)))
 	if err != nil {
@@ -87,6 +88,8 @@ func (c *Client) doRequest(payload *Payload) (*Response, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	tflog.Info(ctx, fmt.Sprintf("Received KSQL response: %s", string(body)))
 
 	if res.StatusCode != http.StatusOK {
 		var obj Response
@@ -120,13 +123,13 @@ func (c *Client) doRequest(payload *Payload) (*Response, error) {
 	return nil, errors.New("response must be object or list")
 }
 
-func (c *Client) describe(name string) (*Source, error) {
+func (c *Client) describe(ctx context.Context, name string) (*Source, error) {
 
 	payload := Payload{
 		Ksql: "DESCRIBE " + name + ";",
 	}
 
-	response, err := c.doRequest(&payload)
+	response, err := c.doRequest(ctx, &payload)
 	if err != nil {
 		return nil, err
 	}
@@ -134,47 +137,53 @@ func (c *Client) describe(name string) (*Source, error) {
 	return &response.Source, nil
 }
 
-func (c *Client) createStream(d *schema.ResourceData, materialized bool, source bool) (*Source, error) {
-	return c.doCreateStream(d, source, materialized, false)
+func (c *Client) createStream(ctx context.Context, data StreamResourceModel, materialized bool, source bool) (*Source, error) {
+	return c.doCreateStream(ctx, data, source, materialized, false)
 }
 
-func (c *Client) updateStream(d *schema.ResourceData, materialized bool) (*Source, error) {
+func (c *Client) updateStream(ctx context.Context, data StreamResourceModel, materialized bool) (*Source, error) {
 	// updating a stream is the same as creating it but with using "CREATE OR REPLACE" in the statement.
 	// Therefore, it can't be a source stream.
 	// Also, it must exist.
-	return c.doCreateStream(d, false, materialized, true)
+	return c.doCreateStream(ctx, data, false, materialized, true)
 }
 
-func (c *Client) doCreateStream(d *schema.ResourceData, source bool, materialized bool, mustExist bool) (*Source, error) {
+func (c *Client) doCreateStream(ctx context.Context, data StreamResourceModel, source bool, materialized bool, mustExist bool) (*Source, error) {
 
-	name := d.Get("name").(string)
+	name := data.Name.ValueString()
 
 	if mustExist {
-		err := c.validateDoesExist(name)
+		err := c.validateDoesExist(ctx, name)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		err := c.validateDoesNotExist(name)
+		err := c.validateDoesNotExist(ctx, name)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	ksql, err := createStreamKsql(name, source, materialized, d)
-	properties := d.Get("properties").(map[string]interface{})
+	ksql, err := createStreamKsql(ctx, name, source, materialized, data)
+
+	//properties := make(map[string]string, len(d.Properties.Elements()))
+	//diags := d.Properties.ElementsAs(ctx, &properties, false)
+	//
+	//if diags.HasError() {
+	//	return nil, fmt.Errorf("could not read properties map: %v", diags)
+	//}
 
 	payload := Payload{
-		Ksql:       *ksql,
-		Properties: properties,
+		Ksql: *ksql,
+		//Properties: d.Properties,
 	}
 
-	_, err = c.doRequest(&payload)
+	_, err = c.doRequest(ctx, &payload)
 	if err != nil {
 		return nil, err
 	}
 
-	created, err := c.describe(name)
+	created, err := c.describe(ctx, name)
 	if err != nil {
 		return nil, fmt.Errorf("this shouldn't happen") // TODO
 	}
@@ -182,9 +191,9 @@ func (c *Client) doCreateStream(d *schema.ResourceData, source bool, materialize
 	return created, nil
 }
 
-func (c *Client) dropStream(name string) error {
+func (c *Client) dropStream(ctx context.Context, name string) error {
 
-	err := c.validateDoesExist(name)
+	err := c.validateDoesExist(ctx, name)
 	if err != nil {
 		return err
 	}
@@ -193,7 +202,7 @@ func (c *Client) dropStream(name string) error {
 		Ksql: fmt.Sprintf("DROP STREAM %s;", name),
 	}
 
-	response, err := c.doRequest(&payload)
+	response, err := c.doRequest(ctx, &payload)
 	if err != nil {
 		return err
 	}
@@ -205,9 +214,9 @@ func (c *Client) dropStream(name string) error {
 	return nil
 }
 
-func (c *Client) validateDoesExist(name string) error {
+func (c *Client) validateDoesExist(ctx context.Context, name string) error {
 
-	_, err := c.describe(name)
+	_, err := c.describe(ctx, name)
 	if err != nil {
 		return fmt.Errorf("there is no stream or table named %s", name)
 	}
@@ -215,9 +224,9 @@ func (c *Client) validateDoesExist(name string) error {
 	return nil
 }
 
-func (c *Client) validateDoesNotExist(name string) error {
+func (c *Client) validateDoesNotExist(ctx context.Context, name string) error {
 
-	_, err := c.describe(name)
+	_, err := c.describe(ctx, name)
 	if err == nil {
 		return fmt.Errorf("there is already a stream or a table named %s", name)
 	}
