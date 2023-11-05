@@ -38,7 +38,7 @@ func main() {
 	flag.Parse()
 
 	opts := providerserver.ServeOpts{
-		Address: "shmyer/ksqldb",
+		Address: "registry.terraform.io/shmyer/ksqldb",
 		Debug:   debug,
 	}
 
