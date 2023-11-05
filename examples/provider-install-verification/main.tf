@@ -48,7 +48,7 @@ resource "ksqldb_stream" "input_properties" {
   kafka_topic  = "input"
   key_format   = "AVRO"
   value_format = "AVRO"
-  properties   = {
+  properties = {
     "auto.offset.reset" = "earliest"
   }
 }
