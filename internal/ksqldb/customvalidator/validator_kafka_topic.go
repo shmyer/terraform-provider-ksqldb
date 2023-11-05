@@ -10,7 +10,7 @@ import (
 
 var _ validator.String = kafkaTopicValidator{}
 
-// kafkaTopicValidator validates that an identifier is valid
+// kafkaTopicValidator validates that an identifier is valid.
 type kafkaTopicValidator struct {
 }
 

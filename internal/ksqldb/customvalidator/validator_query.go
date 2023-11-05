@@ -11,7 +11,7 @@ import (
 
 var _ validator.String = queryValidator{}
 
-// queryValidator validates that an identifier is valid
+// queryValidator validates that a query is valid.
 type queryValidator struct {
 }
 

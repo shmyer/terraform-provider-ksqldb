@@ -288,11 +288,11 @@ func doReadInternal(ctx context.Context, data *StreamResourceModel, client *Clie
 	data.KeyFormat = types.StringValue(stream.KeyFormat)
 	data.ValueFormat = types.StringValue(stream.ValueFormat)
 
-	err = setSchemaIds(ctx, data, stream.Statement, true, KeySchemaIdPattern)
+	err = setSchemaIds(data, stream.Statement, true, KeySchemaIdPattern)
 	if err != nil {
 		return err
 	}
-	err = setSchemaIds(ctx, data, stream.Statement, false, ValueSchemaIdPattern)
+	err = setSchemaIds(data, stream.Statement, false, ValueSchemaIdPattern)
 	if err != nil {
 		return err
 	}
@@ -363,7 +363,7 @@ func setTimestamp(data *StreamResourceModel, stream *Source) {
 	timestamp := stream.Timestamp
 
 	// if received timestamp is nil or empty, set nil in state
-	if &timestamp == nil || len(timestamp) == 0 {
+	if len(timestamp) == 0 {
 		data.Timestamp = types.StringNull()
 		return
 	}
@@ -384,28 +384,28 @@ func setTimestamp(data *StreamResourceModel, stream *Source) {
 	data.Timestamp = types.StringValue(timestamp)
 }
 
-func setSchemaIds(ctx context.Context, data *StreamResourceModel, statement string, isKey bool, pattern *regexp.Regexp) error {
+func setSchemaIds(data *StreamResourceModel, statement string, isKey bool, pattern *regexp.Regexp) error {
 
 	// value schema id can't be found in response json but must be parsed from ksql statement
 	schemaIdMatches := pattern.FindStringSubmatch(statement)
 
 	if len(schemaIdMatches) > 1 {
 
-		if schemaId := schemaIdMatches[1]; &schemaId != nil {
+		schemaId := schemaIdMatches[1]
 
-			// convert the found id to integer
-			if schemaIdInt, err := strconv.Atoi(schemaId); err == nil {
+		// convert the found id to integer
+		if schemaIdInt, err := strconv.Atoi(schemaId); err == nil {
 
-				// set in state object
-				if isKey {
-					data.KeySchemaId = types.Int64Value(int64(schemaIdInt))
-				} else {
-					data.ValueSchemaId = types.Int64Value(int64(schemaIdInt))
-				}
+			// set in state object
+			if isKey {
+				data.KeySchemaId = types.Int64Value(int64(schemaIdInt))
 			} else {
-				return err
+				data.ValueSchemaId = types.Int64Value(int64(schemaIdInt))
 			}
+		} else {
+			return err
 		}
+
 	} else {
 
 		if isKey {

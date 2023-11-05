@@ -10,7 +10,7 @@ import (
 
 var _ validator.String = formatValidator{}
 
-// formatValidator validates that an identifier is valid
+// formatValidator validates that an identifier is valid.
 type formatValidator struct {
 }
 

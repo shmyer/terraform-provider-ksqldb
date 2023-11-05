@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strings"
 	"sync"
@@ -15,7 +15,7 @@ import (
 
 var mutex sync.Mutex
 
-// Client -
+// Client the ksqldb client object.
 type Client struct {
 	client   *http.Client
 	url      string
@@ -45,7 +45,7 @@ type Payload struct {
 	Properties map[string]string `json:"streamsProperties"`
 }
 
-// NewClient -
+// NewClient creates a new ksqldb Client.
 func NewClient(url, username, password *string) *Client {
 	return &Client{
 		client:   &http.Client{Timeout: 10 * time.Second},
@@ -86,7 +86,7 @@ func (c *Client) doRequest(ctx context.Context, payload *Payload) (*Response, er
 	// release
 	mutex.Unlock()
 
-	body, err := ioutil.ReadAll(res.Body)
+	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -166,14 +166,7 @@ func (c *Client) doCreateStream(ctx context.Context, data StreamResourceModel, s
 		}
 	}
 
-	ksql, err := createStreamKsql(ctx, name, source, materialized, data)
-
-	//properties := make(map[string]string, len(d.Properties.Elements()))
-	//diags := d.Properties.ElementsAs(ctx, &properties, false)
-	//
-	//if diags.HasError() {
-	//	return nil, fmt.Errorf("could not read properties map: %v", diags)
-	//}
+	ksql := createStreamKsql(ctx, name, source, materialized, data)
 
 	tflog.Info(ctx, fmt.Sprintf("Properties Raw: %v", data.Properties))
 
@@ -187,7 +180,7 @@ func (c *Client) doCreateStream(ctx context.Context, data StreamResourceModel, s
 		Properties: properties,
 	}
 
-	_, err = c.doRequest(ctx, &payload)
+	_, err := c.doRequest(ctx, &payload)
 	if err != nil {
 		return nil, err
 	}

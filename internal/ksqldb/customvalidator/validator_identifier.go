@@ -12,7 +12,7 @@ import (
 
 var _ validator.String = identifierValidator{}
 
-// identifierValidator validates that an identifier is valid
+// identifierValidator validates that an identifier is valid.
 type identifierValidator struct {
 }
 

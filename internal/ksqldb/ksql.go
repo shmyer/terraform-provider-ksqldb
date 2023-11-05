@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-func createStreamKsql(ctx context.Context, name string, source bool, materialized bool, data StreamResourceModel) (*string, error) {
+func createStreamKsql(ctx context.Context, name string, source bool, materialized bool, data StreamResourceModel) *string {
 
 	var sb strings.Builder
 
@@ -54,7 +54,7 @@ func createStreamKsql(ctx context.Context, name string, source bool, materialize
 
 	tflog.Info(ctx, fmt.Sprintf("Created KSQL statement: %s", ksql))
 
-	return &ksql, nil
+	return &ksql
 }
 
 func appendIfSpecified(sb *strings.Builder, property string, value attr.Value, length *int, lengthBeforeProperties int) {
