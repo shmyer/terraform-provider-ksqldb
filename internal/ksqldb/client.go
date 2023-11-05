@@ -34,6 +34,8 @@ type Source struct {
 	KeyFormat   string `json:"keyFormat"`
 	ValueFormat string `json:"valueFormat"`
 	Topic       string `json:"topic"`
+	Partitions  int64  `json:"partitions"`
+	Replication int64  `json:"replication"`
 	Statement   string `json:"statement"`
 	Timestamp   string `json:"timestamp"`
 }
@@ -173,9 +175,16 @@ func (c *Client) doCreateStream(ctx context.Context, data StreamResourceModel, s
 	//	return nil, fmt.Errorf("could not read properties map: %v", diags)
 	//}
 
+	tflog.Info(ctx, fmt.Sprintf("Properties Raw: %v", data.Properties))
+
+	properties := make(map[string]string, len(data.Properties.Elements()))
+	data.Properties.ElementsAs(ctx, &properties, false)
+
+	tflog.Info(ctx, fmt.Sprintf("Properties made: %v", properties))
+
 	payload := Payload{
-		Ksql: *ksql,
-		//Properties: d.Properties,
+		Ksql:       *ksql,
+		Properties: properties,
 	}
 
 	_, err = c.doRequest(ctx, &payload)

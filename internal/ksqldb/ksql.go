@@ -29,6 +29,11 @@ func createStreamKsql(ctx context.Context, name string, source bool, materialize
 	length := sb.Len()
 
 	appendIfSpecified(&sb, "KAFKA_TOPIC", data.KafkaTopic, &length, lengthBeforeProperties)
+	appendIfSpecified(&sb, "PARTITIONS", data.Partitions, &length, lengthBeforeProperties)
+	appendIfSpecified(&sb, "REPLICAS", data.Replicas, &length, lengthBeforeProperties)
+	appendIfSpecified(&sb, "RETENTION_MS", data.Retention, &length, lengthBeforeProperties)
+	appendIfSpecified(&sb, "TIMESTAMP", data.Timestamp, &length, lengthBeforeProperties)
+	appendIfSpecified(&sb, "TIMESTAMP_FORMAT", data.TimestampFormat, &length, lengthBeforeProperties)
 	appendIfSpecified(&sb, "KEY_FORMAT", data.KeyFormat, &length, lengthBeforeProperties)
 	appendIfSpecified(&sb, "VALUE_FORMAT", data.ValueFormat, &length, lengthBeforeProperties)
 	appendIfSpecified(&sb, "KEY_SCHEMA_ID", data.KeySchemaId, &length, lengthBeforeProperties)
@@ -54,7 +59,7 @@ func createStreamKsql(ctx context.Context, name string, source bool, materialize
 
 func appendIfSpecified(sb *strings.Builder, property string, value attr.Value, length *int, lengthBeforeProperties int) {
 
-	if value == nil || value.IsNull() {
+	if value == nil || value.IsNull() || value.IsUnknown() {
 		return
 	}
 

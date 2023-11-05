@@ -38,7 +38,7 @@ func main() {
 	flag.Parse()
 
 	opts := providerserver.ServeOpts{
-		Address: "hashicorp.com/shmyer/ksqldb",
+		Address: "shmyer/ksqldb",
 		Debug:   debug,
 	}
 

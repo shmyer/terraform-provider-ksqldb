@@ -3,7 +3,9 @@ package customvalidator
 import (
 	"context"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"strings"
 )
 
@@ -15,7 +17,7 @@ type queryValidator struct {
 
 // Description describes the validation in plain text formatting.
 func (v queryValidator) Description(_ context.Context) string {
-	return "The query must only contain valid characters"
+	return "The query must be valid"
 }
 
 // MarkdownDescription describes the validation in Markdown formatting.
@@ -28,6 +30,17 @@ func (v queryValidator) ValidateString(ctx context.Context, request validator.St
 
 	if request.ConfigValue.IsNull() {
 		return
+	}
+
+	var source basetypes.BoolValue
+	request.Config.GetAttribute(ctx, path.Root("source"), &source)
+
+	if source.ValueBool() {
+		response.Diagnostics.Append(diag.NewAttributeErrorDiagnostic(
+			request.Path,
+			v.Description(ctx),
+			"The query attribute can't be used alongside the source attribute",
+		))
 	}
 
 	value := request.ConfigValue.ValueString()

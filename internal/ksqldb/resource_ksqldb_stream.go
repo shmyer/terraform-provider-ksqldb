@@ -11,19 +11,22 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"regexp"
 	"strconv"
 	"strings"
 	"terraform-provider-ksqldb/internal/ksqldb/customvalidator"
+	"terraform-provider-ksqldb/internal/ksqldb/modifiers"
 )
 
-var KeySchemaIdPattern, _ = regexp.Compile(`(?i)KEY_SCHEMA_ID\s*=\s*(\d+)`)
-var ValueSchemaIdPattern, _ = regexp.Compile(`(?i)VALUE_SCHEMA_ID\s*=\s*(\d+)`)
+var KeySchemaIdPattern, _ = regexp.Compile(`(?i)KEY_SCHEMA_ID\s*=\s*'(\d+)'`)
+var ValueSchemaIdPattern, _ = regexp.Compile(`(?i)VALUE_SCHEMA_ID\s*=\s*'(\d+)'`)
 
 // Ensure provider defined types fully satisfy framework interfaces.
 var _ resource.Resource = &StreamResource{}
@@ -39,15 +42,21 @@ type StreamResource struct {
 }
 
 type StreamResourceModel struct {
-	Id            types.String `tfsdk:"id"`
-	Name          types.String `tfsdk:"name"`
-	KafkaTopic    types.String `tfsdk:"kafka_topic"`
-	KeyFormat     types.String `tfsdk:"key_format"`
-	ValueFormat   types.String `tfsdk:"value_format"`
-	KeySchemaId   types.Int64  `tfsdk:"key_schema_id"`
-	ValueSchemaId types.Int64  `tfsdk:"value_schema_id"`
-	Timestamp     types.String `tfsdk:"timestamp"`
-	Query         types.String `tfsdk:"query"`
+	//Id              types.String `tfsdk:"id"`
+	Name            types.String `tfsdk:"name"`
+	KafkaTopic      types.String `tfsdk:"kafka_topic"`
+	Partitions      types.Int64  `tfsdk:"partitions"`
+	Replicas        types.Int64  `tfsdk:"replicas"`
+	Retention       types.Int64  `tfsdk:"retention_ms"`
+	KeyFormat       types.String `tfsdk:"key_format"`
+	ValueFormat     types.String `tfsdk:"value_format"`
+	KeySchemaId     types.Int64  `tfsdk:"key_schema_id"`
+	ValueSchemaId   types.Int64  `tfsdk:"value_schema_id"`
+	Timestamp       types.String `tfsdk:"timestamp"`
+	TimestampFormat types.String `tfsdk:"timestamp_format"`
+	Source          types.Bool   `tfsdk:"source"`
+	Query           types.String `tfsdk:"query"`
+	Properties      types.Map    `tfsdk:"properties"`
 }
 
 func (r *StreamResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -60,14 +69,6 @@ func (r *StreamResource) Schema(ctx context.Context, req resource.SchemaRequest,
 		MarkdownDescription: "Ksqldb stream resource",
 
 		Attributes: map[string]schema.Attribute{
-			"id": schema.StringAttribute{
-				Computed:            true,
-				MarkdownDescription: "Stream id",
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
-				},
-			},
-
 			"name": schema.StringAttribute{
 				MarkdownDescription: "Name of the stream",
 				Required:            true,
@@ -80,17 +81,47 @@ func (r *StreamResource) Schema(ctx context.Context, req resource.SchemaRequest,
 			},
 
 			"kafka_topic": schema.StringAttribute{
-				MarkdownDescription: "The name of the Kafka topic that backs the stream. If this isn't set, the name of the stream in upper case is used as the topic name.",
+				MarkdownDescription: "The name of the Kafka topic that backs the stream.",
 				Required:            true,
 				Validators: []validator.String{
 					customvalidator.KafkaTopic(),
 				},
+				PlanModifiers: []planmodifier.String{
+					modifiers.RequiresReplaceIfIsSourceStreamString,
+				},
 			},
+			"partitions": schema.Int64Attribute{
+				MarkdownDescription: "The number of partitions in the backing topic.",
+				Optional:            true,
+				Computed:            true,
+				PlanModifiers: []planmodifier.Int64{
+					modifiers.RequiresReplaceIfIsSourceStreamInt64,
+				},
+			},
+			"replicas": schema.Int64Attribute{
+				MarkdownDescription: "The number of replicas in the backing topic.",
+				Optional:            true,
+				Computed:            true,
+				PlanModifiers: []planmodifier.Int64{
+					modifiers.RequiresReplaceIfIsSourceStreamInt64,
+				},
+			},
+			"retention_ms": schema.Int64Attribute{
+				MarkdownDescription: "The retention specified in milliseconds in the backing topic.",
+				Optional:            true,
+				PlanModifiers: []planmodifier.Int64{
+					modifiers.RequiresReplaceIfIsSourceStreamInt64,
+				},
+			},
+
 			"key_format": schema.StringAttribute{
 				MarkdownDescription: "The serialization format of the message key in the topic.",
 				Optional:            true,
 				Validators: []validator.String{
 					customvalidator.Format(),
+				},
+				PlanModifiers: []planmodifier.String{
+					modifiers.RequiresReplaceIfIsSourceStreamString,
 				},
 			},
 			"value_format": schema.StringAttribute{
@@ -99,12 +130,19 @@ func (r *StreamResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				Validators: []validator.String{
 					customvalidator.Format(),
 				},
+				PlanModifiers: []planmodifier.String{
+					modifiers.RequiresReplaceIfIsSourceStreamString,
+				},
 			},
+
 			"key_schema_id": schema.Int64Attribute{
 				MarkdownDescription: "The schema ID of the key schema in Schema Registry. The schema is used for schema inference and data serialization.",
 				Optional:            true,
 				Validators: []validator.Int64{
 					int64validator.AtLeast(1),
+				},
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.RequiresReplace(),
 				},
 			},
 			"value_schema_id": schema.Int64Attribute{
@@ -113,26 +151,56 @@ func (r *StreamResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				Validators: []validator.Int64{
 					int64validator.AtLeast(1),
 				},
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.RequiresReplace(),
+				},
 			},
+
 			"timestamp": schema.StringAttribute{
-				MarkdownDescription: "Name of the stream",
+				MarkdownDescription: "Sets a column within the stream's schema to be used as the default source of ROWTIME for any downstream queries.",
 				Optional:            true,
 				Validators: []validator.String{
 					customvalidator.Identifier(),
 				},
+				PlanModifiers: []planmodifier.String{
+					modifiers.RequiresReplaceIfIsSourceStreamString,
+				},
 			},
+			"timestamp_format": schema.StringAttribute{
+				MarkdownDescription: "Use with the timestamp property to specify the type and format of the timestamp column. Note that the provider can't read external changes to this attribute.",
+				Optional:            true,
+				// TODO Validate that timestamp is set
+				PlanModifiers: []planmodifier.String{
+					modifiers.RequiresReplaceIfIsSourceStreamString,
+				},
+			},
+
+			"source": schema.BoolAttribute{
+				MarkdownDescription: "Create a read-only stream",
+				Optional:            true,
+				Computed:            true,
+				Default:             booldefault.StaticBool(false),
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.RequiresReplace(),
+				},
+			},
+
 			"query": schema.StringAttribute{
-				MarkdownDescription: "The KSQL SELECT statement which this stream is materialized from",
+				MarkdownDescription: "The KSQL SELECT statement which this stream is materialized from. Note that the provider can't read external changes to this attribute.",
 				Optional:            true,
 				Validators: []validator.String{
 					customvalidator.Query(),
 				},
 			},
-			//"properties": schema.MapAttribute{
-			//	MarkdownDescription: "Map of string properties to set as the \"streamsProperties\" parameter when issuing the KSQL statement via REST",
-			//	Optional:            true,
-			//	ElementType:         types.StringType,
-			//},
+
+			"properties": schema.MapAttribute{
+				MarkdownDescription: "Map of string properties to set as the \"streamsProperties\" parameter when issuing the KSQL statement via REST",
+				Optional:            true,
+				ElementType:         types.StringType,
+				PlanModifiers: []planmodifier.Map{
+					modifiers.RequiresReplaceIfIsSourceStreamMap,
+				},
+			},
 		},
 	}
 }
@@ -167,14 +235,11 @@ func (r *StreamResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 
-	stream, err := r.client.createStream(ctx, data, false, false)
+	_, err := r.client.createStream(ctx, data, false, false)
 	if err != nil {
 		resp.Diagnostics.Append(diag.NewErrorDiagnostic(err.Error(), err.Error()))
 		return
 	}
-
-	// set id
-	data.Id = types.StringValue(stream.Name)
 
 	err = doReadInternal(ctx, &data, r.client)
 	if err != nil {
@@ -202,8 +267,6 @@ func (r *StreamResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return
 	}
 
-	tflog.Info(ctx, fmt.Sprintf("Read data: %v", data))
-
 	// Save updated data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -211,25 +274,25 @@ func (r *StreamResource) Read(ctx context.Context, req resource.ReadRequest, res
 func doReadInternal(ctx context.Context, data *StreamResourceModel, client *Client) error {
 
 	// use id instead of name here for import functionality
-	name := data.Id.ValueString()
+	name := data.Name.ValueString()
 
 	stream, err := client.describe(ctx, name)
 	if err != nil {
 		return err
 	}
 
-	tflog.Info(ctx, fmt.Sprintf("Read stream: %v", stream))
-
 	data.Name = types.StringValue(stream.Name)
 	data.KafkaTopic = types.StringValue(stream.Topic)
+	data.Partitions = types.Int64Value(stream.Partitions)
+	data.Replicas = types.Int64Value(stream.Replication)
 	data.KeyFormat = types.StringValue(stream.KeyFormat)
 	data.ValueFormat = types.StringValue(stream.ValueFormat)
 
-	err = setSchemaIds(data, stream.Statement, true, KeySchemaIdPattern)
+	err = setSchemaIds(ctx, data, stream.Statement, true, KeySchemaIdPattern)
 	if err != nil {
 		return err
 	}
-	err = setSchemaIds(data, stream.Statement, false, ValueSchemaIdPattern)
+	err = setSchemaIds(ctx, data, stream.Statement, false, ValueSchemaIdPattern)
 	if err != nil {
 		return err
 	}
@@ -288,11 +351,11 @@ func (r *StreamResource) Delete(ctx context.Context, req resource.DeleteRequest,
 
 func (r *StreamResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	if strings.ToUpper(req.ID) != req.ID {
-		resp.Diagnostics.Append(diag.NewErrorDiagnostic("Invalid ID", "The ID must be specified in uppercase"))
+		resp.Diagnostics.Append(diag.NewErrorDiagnostic("Invalid name", "The name must be specified in uppercase"))
 		return
 	}
 
-	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	resource.ImportStatePassthroughID(ctx, path.Root("name"), req, resp)
 }
 
 func setTimestamp(data *StreamResourceModel, stream *Source) {
@@ -321,11 +384,13 @@ func setTimestamp(data *StreamResourceModel, stream *Source) {
 	data.Timestamp = types.StringValue(timestamp)
 }
 
-func setSchemaIds(data *StreamResourceModel, statement string, isKey bool, pattern *regexp.Regexp) error {
+func setSchemaIds(ctx context.Context, data *StreamResourceModel, statement string, isKey bool, pattern *regexp.Regexp) error {
 
 	// value schema id can't be found in response json but must be parsed from ksql statement
 	schemaIdMatches := pattern.FindStringSubmatch(statement)
+
 	if len(schemaIdMatches) > 1 {
+
 		if schemaId := schemaIdMatches[1]; &schemaId != nil {
 
 			// convert the found id to integer

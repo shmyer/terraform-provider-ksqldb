@@ -1,15 +1,3 @@
-terraform {
-  required_providers {
-    ksqldb = {
-      source = "shmyer/ksqldb"
-    }
-  }
-}
-
-provider "ksqldb" {
-  url = "http://localhost:8088"
-}
-
 resource "ksqldb_stream" "input" {
   name         = "INPUT"
   kafka_topic  = "input"
