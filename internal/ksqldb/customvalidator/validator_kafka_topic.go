@@ -26,6 +26,11 @@ func (v kafkaTopicValidator) MarkdownDescription(ctx context.Context) string {
 
 // ValidateString performs the validation.
 func (v kafkaTopicValidator) ValidateString(ctx context.Context, request validator.StringRequest, response *validator.StringResponse) {
+
+	if request.ConfigValue.IsNull() || request.ConfigValue.IsUnknown() {
+		return
+	}
+
 	value := request.ConfigValue.ValueString()
 
 	if len(value) > 255 {

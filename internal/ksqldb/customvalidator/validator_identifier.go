@@ -29,7 +29,7 @@ func (v identifierValidator) MarkdownDescription(ctx context.Context) string {
 // ValidateString performs the validation.
 func (v identifierValidator) ValidateString(ctx context.Context, request validator.StringRequest, response *validator.StringResponse) {
 
-	if request.ConfigValue.IsNull() || len(request.ConfigValue.ValueString()) == 0 {
+	if request.ConfigValue.IsNull() || request.ConfigValue.IsUnknown() {
 		return
 	}
 

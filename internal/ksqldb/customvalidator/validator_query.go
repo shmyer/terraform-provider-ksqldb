@@ -28,7 +28,7 @@ func (v queryValidator) MarkdownDescription(ctx context.Context) string {
 // ValidateString performs the validation.
 func (v queryValidator) ValidateString(ctx context.Context, request validator.StringRequest, response *validator.StringResponse) {
 
-	if request.ConfigValue.IsNull() {
+	if request.ConfigValue.IsNull() || request.ConfigValue.IsUnknown() {
 		return
 	}
 
